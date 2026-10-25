@@ -2,5 +2,13 @@ __pycache__/
 *.pyc
 .DS_Store
 out
+checkpoints/
 website/
 docs-minimind/
+
+# 下载的模型权重与数据集，体积大，不入库
+minimind-3/
+scripts/minimind-3
+dataset/*.jsonl
+dataset/.msc
+dataset/.mv

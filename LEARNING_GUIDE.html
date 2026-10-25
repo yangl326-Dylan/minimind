@@ -1,0 +1,1728 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="description" content="MiniMind 学习指导：从零训练 64M 小语言模型的完整路线，含本机 CPU 实操与玩具模型训练方案。">
+<title>MiniMind 学习指导 · 本机实操版</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='10' fill='%2317140f'/%3E%3Ctext x='32' y='43' font-family='monospace' font-size='26' font-weight='700' fill='%23f8f4ea' text-anchor='middle'%3EMM%3C/text%3E%3C/svg%3E">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  --paper:#eee8db; --paper-2:#f8f4ea; --paper-3:#e6dece;
+  --ink:#17140f; --ink-2:#3d382f; --muted:#7b7365;
+  --line:#d7cdba; --line-strong:#b9ad95;
+  --accent:#b23a1f; --accent-soft:rgba(178,58,31,.075); --accent-line:rgba(178,58,31,.35);
+  --teal:#1f5f5b;
+  --code:#191712; --code-ink:#e9e2d4; --code-muted:#9b9282;
+  --shadow:0 1px 0 rgba(255,255,255,.55) inset,0 14px 34px -22px rgba(50,38,18,.35);
+  --serif:"Songti SC","Noto Serif CJK SC","Source Han Serif SC","STSong","Iowan Old Style","Baskerville",Georgia,serif;
+  --sans:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --mono:"SF Mono","JetBrains Mono","Fira Code",Menlo,Consolas,monospace;
+  --sidebar-w:304px; --content-w:900px;
+}
+[data-theme="dark"]{
+  --paper:#14120e; --paper-2:#1b1813; --paper-3:#221e18;
+  --ink:#efe8d9; --ink-2:#cec5b3; --muted:#948b79;
+  --line:#332e25; --line-strong:#4b4538;
+  --accent:#ff7a52; --accent-soft:rgba(255,122,82,.085); --accent-line:rgba(255,122,82,.4);
+  --teal:#7cc7bd;
+  --code:#0d0c09; --code-ink:#e9e2d4; --code-muted:#8f8777;
+  --shadow:0 1px 0 rgba(255,255,255,.035) inset,0 18px 44px -24px rgba(0,0,0,.9);
+}
+html{scroll-behavior:smooth;scroll-padding-top:28px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{
+  margin:0;background-color:var(--paper);color:var(--ink-2);
+  font-family:var(--sans);font-size:16px;line-height:1.8;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  background-image:radial-gradient(circle at 1px 1px,rgba(90,70,35,.10) 1px,transparent 0);
+  background-size:24px 24px;
+}
+[data-theme="dark"] body{background-image:radial-gradient(circle at 1px 1px,rgba(255,235,190,.055) 1px,transparent 0)}
+body::before{
+  content:"";position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.22;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+  mix-blend-mode:multiply
+}
+[data-theme="dark"] body::before{mix-blend-mode:screen;opacity:.10}
+::selection{background:var(--accent);color:var(--paper-2)}
+a{color:var(--accent);text-decoration:none;text-underline-offset:3px}
+a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--accent);color:#fff;padding:10px 16px;z-index:100}
+.skip:focus{left:12px;top:12px}
+
+/* 进度条 */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;background:transparent;z-index:90;pointer-events:none}
+.progress span{display:block;height:100%;width:100%;transform-origin:0 50%;transform:scaleX(0);
+  background:linear-gradient(90deg,var(--accent),#d9822b);transition:transform .08s linear}
+
+/* 布局 */
+.layout{display:grid;grid-template-columns:var(--sidebar-w) minmax(0,1fr);position:relative;z-index:1}
+.sidebar{
+  position:sticky;top:0;height:100vh;display:flex;flex-direction:column;
+  background:linear-gradient(180deg,var(--paper-2),var(--paper));
+  border-right:1px solid var(--line);padding:26px 0 18px;overflow:hidden
+}
+.brand{display:flex;align-items:center;gap:12px;padding:0 24px 22px;border-bottom:1px solid var(--line)}
+.brand-mark{
+  width:44px;height:44px;flex:0 0 44px;display:grid;place-items:center;
+  font-family:var(--mono);font-size:15px;font-weight:700;letter-spacing:.04em;
+  color:var(--paper-2);background:var(--ink);border-radius:3px;transform:rotate(-4deg);
+  box-shadow:3px 3px 0 var(--accent)
+}
+[data-theme="dark"] .brand-mark{background:var(--accent);color:#16120d;box-shadow:3px 3px 0 #3a3328}
+.brand strong{display:block;font-family:var(--serif);font-size:19px;line-height:1.2;color:var(--ink);letter-spacing:.02em}
+.brand span{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.toc-head{display:flex;justify-content:space-between;align-items:baseline;padding:20px 24px 10px;
+  font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.toc-head b{color:var(--ink);font-weight:600}
+.toc-head em{font-style:normal;font-size:9px;color:var(--accent);letter-spacing:.1em}
+.toc{flex:1;overflow-y:auto;padding:4px 14px 20px;scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.toc::-webkit-scrollbar{width:5px}
+.toc::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px}
+.toc .toc>ul,.toc ul{list-style:none;margin:0;padding:0}
+.toc ul ul{margin:1px 0 6px}
+.toc li{margin:0}
+.toc a{
+  display:block;padding:5px 10px 5px 12px;border-left:2px solid transparent;
+  color:var(--ink-2);font-size:13px;line-height:1.45;border-radius:0 4px 4px 0;
+  transition:color .15s,background .15s,border-color .15s
+}
+.toc a:hover{color:var(--ink);background:var(--accent-soft);text-decoration:none}
+.toc ul ul a{font-size:12px;color:var(--muted);padding-left:26px;padding-top:3px;padding-bottom:3px}
+.toc ul ul a:hover{color:var(--ink-2)}
+.toc a.active{color:var(--accent);border-left-color:var(--accent);background:var(--accent-soft);font-weight:600}
+.toc ul ul a.active{color:var(--accent);font-weight:500}
+.sidebar-foot{margin-top:auto;padding:16px 24px 0;border-top:1px solid var(--line);
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.06em;color:var(--muted);line-height:1.7}
+.sidebar-foot .dot{display:inline-block;width:6px;height:6px;border-radius:50%;background:var(--teal);margin-right:6px;vertical-align:1px}
+.sidebar-foot p{margin:4px 0 0}
+
+/* 主体 */
+main{min-width:0}
+.hero{position:relative;overflow:hidden;padding:74px clamp(26px,5vw,76px) 56px;border-bottom:1px solid var(--line)}
+.hero::after{
+  content:"";position:absolute;right:-140px;top:-120px;width:420px;height:420px;border-radius:50%;
+  background:radial-gradient(circle,rgba(178,58,31,.10),transparent 68%);pointer-events:none
+}
+.hero-grid{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:30px;align-items:end;max-width:calc(var(--content-w) + 10px)}
+.kicker{display:flex;align-items:center;gap:9px;margin:0 0 22px;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--muted)}
+.kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}
+.hero h1{margin:0;font-family:var(--serif);font-weight:500;color:var(--ink);line-height:.92;letter-spacing:-.025em}
+.hero h1 .latin{display:block;font-size:clamp(56px,8.2vw,104px)}
+.hero h1 .cn{display:block;margin-top:18px;font-size:clamp(20px,2.2vw,27px);letter-spacing:.34em;color:var(--ink-2);font-weight:400}
+.hero h1 .cn::before{content:"";display:inline-block;width:52px;height:2px;background:var(--accent);vertical-align:7px;margin-right:20px}
+.lede{margin:26px 0 0;font-size:17px;line-height:1.85;color:var(--ink-2);max-width:46ch}
+.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin:30px 0 0}
+.btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--ink);border-radius:4px;
+  padding:11px 18px;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;
+  cursor:pointer;background:transparent;color:var(--ink);transition:transform .15s,background .15s,color .15s,box-shadow .15s}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn.primary{background:var(--ink);color:var(--paper-2);box-shadow:3px 3px 0 var(--accent)}
+.btn.primary:hover{background:var(--accent);border-color:var(--accent);color:#fff;box-shadow:3px 3px 0 rgba(0,0,0,.25)}
+.btn.ghost{border-color:var(--line-strong);color:var(--ink-2)}
+.btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
+.meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;margin:40px 0 0;
+  border:1px solid var(--line);background:var(--line);border-radius:5px;overflow:hidden}
+.meta div{background:var(--paper-2);padding:12px 14px}
+.meta dt{font-family:var(--mono);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--muted);margin:0 0 3px}
+.meta dd{margin:0;font-size:12.5px;color:var(--ink);font-weight:500;line-height:1.45;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-mark{position:relative;display:flex;flex-direction:column;align-items:flex-end;justify-content:flex-end;
+  padding-bottom:6px;user-select:none;pointer-events:none}
+.mark-num{font-family:var(--serif);font-size:clamp(110px,14vw,190px);line-height:.78;color:transparent;
+  -webkit-text-stroke:1.2px var(--line-strong);letter-spacing:-.06em}
+.mark-unit{position:absolute;right:2px;bottom:34px;font-family:var(--mono);font-size:20px;color:var(--accent);letter-spacing:.08em}
+.mark-label{font-family:var(--mono);font-size:9px;letter-spacing:.3em;text-transform:uppercase;color:var(--muted);
+  border-top:1px solid var(--line-strong);padding-top:8px;margin-top:8px}
+
+/* 正文 */
+.content{max-width:var(--content-w);margin:0 auto;padding:8px clamp(26px,5vw,56px) 90px}
+.content>blockquote:first-child{margin-top:44px}
+.content h2{
+  position:relative;display:flex;align-items:baseline;gap:14px;
+  margin:78px 0 26px;padding-top:30px;border-top:1px solid var(--line);
+  font-family:var(--serif);font-weight:600;font-size:clamp(27px,3.2vw,36px);
+  line-height:1.25;letter-spacing:-.01em;color:var(--ink)
+}
+.content h2:first-of-type{border-top:0;padding-top:0;margin-top:46px}
+.chapter{
+  flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  min-width:34px;height:26px;padding:0 7px;border:1px solid var(--accent-line);border-radius:3px;
+  font-family:var(--mono);font-size:12px;font-weight:500;letter-spacing:.1em;color:var(--accent);
+  transform:translateY(-3px);background:var(--accent-soft)
+}
+.h2-text{min-width:0}
+.anchor{margin-left:auto;font-family:var(--mono);font-size:14px;color:var(--line-strong);opacity:0;transition:opacity .15s}
+h2:hover .anchor,h3:hover .anchor{opacity:1}
+.content h3{margin:46px 0 14px;font-size:19px;font-weight:600;color:var(--ink);line-height:1.45;letter-spacing:.005em}
+.content h3::before{content:"";display:inline-block;width:3px;height:14px;background:var(--accent);margin-right:10px;vertical-align:-1px;border-radius:1px}
+.content h4{margin:30px 0 10px;font-size:15px;color:var(--ink)}
+.content p{margin:14px 0;font-size:15.5px;line-height:1.9;color:var(--ink-2)}
+.content strong{color:var(--ink);font-weight:600}
+.content em{color:var(--teal);font-style:normal}
+.content ul,.content ol{margin:14px 0;padding-left:24px}
+.content li{margin:6px 0;font-size:15.5px;line-height:1.85}
+.content ul>li::marker{color:var(--accent)}
+.content ol>li::marker{font-family:var(--mono);font-size:12px;color:var(--accent)}
+.task-box{display:inline-block;width:13px;height:13px;border:1.5px solid var(--line-strong);border-radius:3px;
+  margin-right:8px;vertical-align:-1px;background:var(--paper-2)}
+.task-box.checked{background:var(--accent);border-color:var(--accent)}
+hr{border:0;height:1px;margin:54px 0;background:linear-gradient(90deg,transparent,var(--line-strong) 20%,var(--line-strong) 80%,transparent)}
+blockquote{
+  position:relative;margin:28px 0;padding:20px 22px 20px 24px;border-left:3px solid var(--accent);
+  background:linear-gradient(90deg,var(--accent-soft),transparent 85%);border-radius:0 6px 6px 0
+}
+blockquote::before{
+  content:"NOTE";position:absolute;top:-9px;left:16px;padding:0 6px;background:var(--paper);
+  font-family:var(--mono);font-size:8.5px;letter-spacing:.22em;color:var(--accent)
+}
+blockquote.warn{border-left-color:#c07a12;background:linear-gradient(90deg,rgba(192,122,18,.10),transparent 85%)}
+blockquote.warn::before{content:"CAREFUL";color:#b06f0d}
+[data-theme="dark"] blockquote.warn::before{color:#e2a33f}
+blockquote p{margin:0;font-size:14.5px;line-height:1.8}
+blockquote p+p{margin-top:8px}
+code{font-family:var(--mono);font-size:.88em;background:var(--paper-3);border:1px solid var(--line);
+  padding:.08em .34em;border-radius:3px;color:var(--ink)}
+.content a code{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+
+.code-block{margin:20px 0;border-radius:8px;overflow:hidden;background:var(--code);
+  border:1px solid rgba(255,255,255,.07);box-shadow:var(--shadow)}
+.code-head{display:flex;align-items:center;justify-content:space-between;padding:7px 14px;
+  background:rgba(255,255,255,.045);border-bottom:1px solid rgba(255,255,255,.07)}
+.code-head span{font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--code-muted)}
+.copy{border:1px solid rgba(255,255,255,.16);background:transparent;color:#c9c0ae;border-radius:3px;
+  padding:3px 8px;font-family:var(--mono);font-size:9px;letter-spacing:.1em;cursor:pointer;transition:.15s}
+.copy:hover{border-color:var(--accent);color:#ffb39d}
+.copy.done{border-color:#5f9e91;color:#9bd3c8}
+.code-block pre{margin:0;padding:16px 18px 18px;overflow-x:auto;background:transparent;border:0}
+.code-block pre code{display:block;background:none;border:0;padding:0;color:var(--code-ink);
+  font-size:12.5px;line-height:1.72;white-space:pre}
+.table-scroll{margin:22px 0;overflow-x:auto;border:1px solid var(--line);border-radius:6px;background:var(--paper-2);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;font-size:13.5px;line-height:1.6}
+thead th{background:var(--paper-3);color:var(--ink);text-align:left;padding:11px 14px;
+  font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  border-bottom:1px solid var(--line-strong);white-space:nowrap}
+tbody td{padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--ink-2)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:var(--accent-soft)}
+tbody td:first-child{color:var(--ink);font-weight:500}
+tbody td code{font-size:.86em;white-space:nowrap}
+
+.footer{max-width:var(--content-w);margin:0 auto;padding:34px clamp(26px,5vw,56px) 64px;border-top:1px solid var(--line);
+  display:flex;align-items:center;gap:16px;flex-wrap:wrap;color:var(--muted)}
+.foot-mark{width:36px;height:36px;display:grid;place-items:center;font-family:var(--mono);font-size:11px;font-weight:700;
+  color:var(--paper-2);background:var(--ink);border-radius:3px;transform:rotate(-3deg)}
+[data-theme="dark"] .foot-mark{background:var(--accent);color:#16120d}
+.footer p{margin:0;font-size:11.5px;line-height:1.7}
+.footer .small{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--muted)}
+
+/* 控件 */
+.controls{position:fixed;right:22px;bottom:22px;z-index:70;display:flex;flex-direction:column;gap:9px}
+.round{width:40px;height:40px;display:grid;place-items:center;border-radius:50%;cursor:pointer;
+  border:1px solid var(--line-strong);background:var(--paper-2);color:var(--ink);
+  box-shadow:var(--shadow);transition:transform .15s,border-color .15s,color .15s}
+.round:hover{transform:translateY(-2px);border-color:var(--accent);color:var(--accent)}
+.round svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+#backtop{opacity:0;pointer-events:none;transform:translateY(6px);transition:.2s}
+#backtop.show{opacity:1;pointer-events:auto;transform:none}
+[data-theme="light"] .icon-moon{display:block}
+[data-theme="light"] .icon-sun{display:none}
+[data-theme="dark"] .icon-moon{display:none}
+[data-theme="dark"] .icon-sun{display:block}
+
+/* 移动端 */
+.topbar{display:none}
+.overlay{display:none;position:fixed;inset:0;background:rgba(10,8,5,.45);backdrop-filter:blur(2px);z-index:55;opacity:0;transition:opacity .2s}
+@media (max-width:1040px){
+  .layout{grid-template-columns:1fr}
+  .sidebar{position:fixed;left:0;top:0;bottom:0;width:min(84vw,320px);z-index:60;
+    transform:translateX(-102%);transition:transform .26s cubic-bezier(.2,.7,.2,1);box-shadow:20px 0 60px -20px rgba(0,0,0,.5)}
+  .sidebar.open{transform:none}
+  .overlay.show{display:block;opacity:1}
+  .topbar{display:flex;position:sticky;top:0;z-index:50;align-items:center;justify-content:space-between;
+    padding:10px 16px;border-bottom:1px solid var(--line);
+    background:color-mix(in srgb,var(--paper) 86%,transparent);backdrop-filter:blur(12px)}
+  .topbar .tb-brand{display:flex;align-items:center;gap:9px;font-family:var(--serif);font-size:15px;color:var(--ink)}
+  .topbar .tb-mark{width:26px;height:26px;display:grid;place-items:center;background:var(--ink);color:var(--paper-2);
+    border-radius:2px;font-family:var(--mono);font-size:9px;transform:rotate(-3deg)}
+  [data-theme="dark"] .topbar .tb-mark{background:var(--accent);color:#16120d}
+  .menu-btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line-strong);background:transparent;
+    color:var(--ink);border-radius:3px;padding:6px 10px;font-family:var(--mono);font-size:10px;letter-spacing:.12em;cursor:pointer}
+  .hero{padding-top:44px}
+  .hero-grid{grid-template-columns:1fr}
+  .hero-mark{display:none}
+  .meta{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .content{padding-left:22px;padding-right:22px}
+  .controls{right:14px;bottom:14px}
+}
+@media (max-width:520px){
+  .hero h1 .cn{letter-spacing:.2em}
+  .hero h1 .cn::before{width:26px;margin-right:12px}
+  .lede{font-size:15.5px}
+  .content h2{gap:10px}
+  .chapter{min-width:28px;height:23px;font-size:10px}
+  .content p,.content li{font-size:15px}
+}
+
+@media (prefers-reduced-motion:no-preference){
+  .hero .kicker,.hero h1,.hero .lede,.hero-actions,.meta{animation:rise .75s cubic-bezier(.2,.7,.2,1) both}
+  .hero h1{animation-delay:.06s}.hero .lede{animation-delay:.12s}
+  .hero-actions{animation-delay:.18s}.meta{animation-delay:.24s}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+}
+
+@media print{
+  .sidebar,.topbar,.controls,.progress,.overlay,.menu-btn{display:none!important}
+  .layout{display:block}
+  body{background:#fff;color:#111;font-size:12pt}
+  body::before{display:none}
+  .hero{padding:0 0 24px;border-bottom:1px solid #ccc}
+  .hero h1 .latin{font-size:42pt}.hero h1 .cn{font-size:16pt;margin-top:8px}
+  .hero-mark,.hero-actions{display:none}
+  .meta{border-color:#ddd}
+  .content{max-width:none;padding:0}
+  .content h2{page-break-after:avoid;break-after:avoid;margin-top:28px;padding-top:14px}
+  .code-block,.table-scroll,blockquote{page-break-inside:avoid;break-inside:avoid}
+  .code-block pre code{white-space:pre-wrap}
+  a{color:#111;text-decoration:none}
+  .anchor{display:none}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到正文</a>
+<div class="progress" aria-hidden="true"><span></span></div>
+
+<header class="topbar">
+  <div class="tb-brand"><span class="tb-mark">MM</span> MiniMind 学习指导</div>
+  <button class="menu-btn" id="menu-btn" aria-controls="sidebar" aria-expanded="false">目录</button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">MM</div>
+      <div><strong>MiniMind</strong><span>Learning Manual</span></div>
+    </div>
+    <div class="toc-head"><b>目录</b><em>13 CHAPTERS</em></div>
+    <nav class="toc" aria-label="章节目录">
+      <div class="toc">
+<ul>
+<li><a href="#0-一分钟看全局">0. 一分钟看全局</a></li>
+<li><a href="#1-环境使用">1. 环境使用</a></li>
+<li><a href="#2-第一站推理">2. 第一站：推理</a><ul>
+<li><a href="#21-两种权重格式">2.1 两种权重格式</a></li>
+<li><a href="#22-跑一次推理">2.2 跑一次推理</a></li>
+<li><a href="#23-web-ui-与-api">2.3 Web UI 与 API</a></li>
+<li><a href="#24-下载官方原生权重可选用于微调">2.4 下载官方原生权重（可选，用于微调）</a></li>
+</ul>
+</li>
+<li><a href="#3-代码地图与阅读顺序">3. 代码地图与阅读顺序</a></li>
+<li><a href="#4-模型结构逐块拆解">4. 模型结构逐块拆解</a><ul>
+<li><a href="#41-rmsnorm">4.1 RMSNorm</a></li>
+<li><a href="#42-rope-与-yarn">4.2 RoPE 与 YaRN</a></li>
+<li><a href="#43-gqa-attention">4.3 GQA Attention</a></li>
+<li><a href="#44-swiglu-ffn">4.4 SwiGLU FFN</a></li>
+<li><a href="#45-moe可选">4.5 MoE（可选）</a></li>
+<li><a href="#46-block-与残差">4.6 Block 与残差</a></li>
+<li><a href="#47-输出层与-loss">4.7 输出层与 loss</a></li>
+<li><a href="#48-手写-generate">4.8 手写 generate</a></li>
+<li><a href="#49-参数量怎么来的">4.9 参数量怎么来的</a></li>
+</ul>
+</li>
+<li><a href="#5-数据与-loss-mask">5. 数据与 loss mask</a><ul>
+<li><a href="#51-预训练数据-pretraindataset">5.1 预训练数据 PretrainDataset</a></li>
+<li><a href="#52-sft-数据-sftdataset">5.2 SFT 数据 SFTDataset</a></li>
+<li><a href="#53-dpo-数据-dpodataset">5.3 DPO 数据 DPODataset</a></li>
+<li><a href="#54-rlaif-agent-数据">5.4 RLAIF / Agent 数据</a></li>
+</ul>
+</li>
+<li><a href="#6-训练主线每个阶段在做什么">6. 训练主线：每个阶段在做什么</a><ul>
+<li><a href="#61-预训练">6.1 预训练</a></li>
+<li><a href="#62-全参-sft">6.2 全参 SFT</a></li>
+<li><a href="#63-lora">6.3 LoRA</a></li>
+<li><a href="#64-dpo">6.4 DPO</a></li>
+<li><a href="#65-蒸馏">6.5 蒸馏</a></li>
+<li><a href="#66-rlppo-grpo-agent">6.6 RL：PPO / GRPO / Agent</a></li>
+<li><a href="#67-转-hf-格式与部署">6.7 转 HF 格式与部署</a></li>
+</ul>
+</li>
+<li><a href="#7-本机-cpu-的现实与玩具模型路线">7. 本机 CPU 的现实与玩具模型路线</a><ul>
+<li><a href="#71-实测速度本机torch-默认-2-线程">7.1 实测速度（本机，torch 默认 2 线程）</a></li>
+<li><a href="#72-为什么不能按默认配置跑完整训练">7.2 为什么不能按默认配置跑完整训练</a></li>
+<li><a href="#73-玩具模型路线推荐">7.3 玩具模型路线（推荐）</a></li>
+<li><a href="#74-玩具路线的三个注意点">7.4 玩具路线的三个注意点</a></li>
+</ul>
+</li>
+<li><a href="#8-四周学习计划">8. 四周学习计划</a><ul>
+<li><a href="#第-1-周推理-模型结构">第 1 周：推理 + 模型结构</a></li>
+<li><a href="#第-2-周数据与预训练">第 2 周：数据与预训练</a></li>
+<li><a href="#第-3-周sftloradpo">第 3 周：SFT、LoRA、DPO</a></li>
+<li><a href="#第-4-周蒸馏rl部署与实验">第 4 周：蒸馏、RL、部署与实验</a></li>
+</ul>
+</li>
+<li><a href="#9-十个可以动手的实验">9. 十个可以动手的实验</a><ul>
+<li><a href="#实验-1gqa-到底省了什么">实验 1：GQA 到底省了什么</a></li>
+<li><a href="#实验-2rope-theta">实验 2：RoPE theta</a></li>
+<li><a href="#实验-3tied-embedding">实验 3：tied embedding</a></li>
+<li><a href="#实验-4sft-的-label-mask">实验 4：SFT 的 label mask</a></li>
+<li><a href="#实验-5lora-rank">实验 5：LoRA rank</a></li>
+<li><a href="#实验-6dpo-beta">实验 6：DPO beta</a></li>
+<li><a href="#实验-7采样策略">实验 7：采样策略</a></li>
+<li><a href="#实验-8moe-vs-dense玩具规模">实验 8：MoE vs Dense（玩具规模）</a></li>
+<li><a href="#实验-9序列长度与吞吐">实验 9：序列长度与吞吐</a></li>
+<li><a href="#实验-10蒸馏温度">实验 10：蒸馏温度</a></li>
+</ul>
+</li>
+<li><a href="#10-排错手册">10. 排错手册</a></li>
+<li><a href="#11-命令速查表">11. 命令速查表</a></li>
+<li><a href="#12-术语表">12. 术语表</a></li>
+<li><a href="#附录产物与文件对照">附录：产物与文件对照</a></li>
+</ul>
+</div>
+
+    </nav>
+    <div class="sidebar-foot">
+      <span class="dot"></span>环境已就绪<br>
+      <p>torch 2.5.1 · py3.12 · CPU</p>
+    </div>
+  </aside>
+  <div class="overlay"></div>
+
+  <main id="main">
+    <header class="hero">
+      <div class="hero-grid">
+        <div class="hero-main">
+          <p class="kicker"><span class="dot"></span>Field Manual · MM-03</p>
+          <h1><span class="latin">MiniMind</span><span class="cn">学习指导</span></h1>
+          <p class="lede">从零训练一个 64M 小语言模型的完整路线：<br>模型结构、数据管线、预训练、对齐与部署。</p>
+          <div class="hero-actions">
+            <a class="btn primary" href="#0-一分钟看全局">开始阅读 →</a>
+            <button class="btn ghost" id="print-btn" type="button">打印 / 存为 PDF</button>
+          </div>
+          <dl class="meta">
+            <div><dt>环境</dt><dd>conda · minimind</dd></div>
+            <div><dt>硬件</dt><dd>Intel Mac · CPU only</dd></div>
+            <div><dt>模型</dt><dd>63.9M · 8 layers</dd></div>
+            <div><dt>阅读</dt><dd>约 10 分钟</dd></div>
+          </dl>
+        </div>
+        <div class="hero-mark" aria-hidden="true">
+          <span class="mark-num">64</span>
+          <span class="mark-unit">M</span>
+          <span class="mark-label">Parameters</span>
+        </div>
+      </div>
+    </header>
+
+    <article class="content">
+<p>这份指导不是 README 的复述，而是回答三个问题：</p>
+<ol>
+<li><strong>代码该按什么顺序读？</strong>（每块在做什么、对应哪个文件）</li>
+<li><strong>在本机 CPU 上能做什么、不能做什么？</strong>（含实测速度）</li>
+<li><strong>怎样用最小成本把整条训练链路跑通？</strong>（玩具模型路线）</li>
+</ol>
+<hr />
+<h2 id="0-一分钟看全局"><span class="chapter">0</span><span class="h2-text">一分钟看全局</span></h2>
+<p>MiniMind 是一条<strong>从零训练小语言模型</strong>的完整流水线，所有核心算法都用原生 PyTorch 实现：</p>
+<pre><code>预训练语料 {&quot;text&quot;: ...}
+        │
+        ▼
+   train_pretrain.py          # 下一 token 预测，学语言能力
+        │  out/pretrain_768.pth
+        ▼
+   train_full_sft.py          # 对话格式 SFT，只对 assistant 回答算 loss
+        │  out/full_sft_768.pth
+        ├──────────────► train_lora.py      # 低成本领域适配（只存 LoRA 权重）
+        ├──────────────► train_dpo.py       # 偏好对齐（chosen / rejected）
+        ├──────────────► train_distillation.py  # 大模型教小模型（KL 蒸馏）
+        └──────────────► train_ppo.py / train_grpo.py / train_agent.py  # RL
+        │
+        ▼
+   scripts/convert_model.py   # 转成 HuggingFace/Qwen3 结构
+        │  ./minimind-3
+        ▼
+   eval_llm.py / web_demo.py / serve_openai_api.py
+</code></pre>
+<p>核心代码量只有约 3500 行（不含 README），非常适合逐行读。</p>
+<p><strong>模型规格（minimind-3）</strong></p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>参数量</td>
+<td>63.9M（README 标称 64M）</td>
+</tr>
+<tr>
+<td>hidden_size</td>
+<td>768</td>
+</tr>
+<tr>
+<td>层数</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Q / KV heads</td>
+<td>8 / 4（GQA，2 个 Q head 共享 1 组 KV）</td>
+</tr>
+<tr>
+<td>head_dim</td>
+<td>96</td>
+</tr>
+<tr>
+<td>FFN 中间维度</td>
+<td>2432（SwiGLU）</td>
+</tr>
+<tr>
+<td>词表</td>
+<td>6400</td>
+</tr>
+<tr>
+<td>最大位置</td>
+<td>32768</td>
+</tr>
+<tr>
+<td>RoPE theta</td>
+<td>1e6</td>
+</tr>
+<tr>
+<td>词嵌入</td>
+<td>与 lm_head 共享（tied）</td>
+</tr>
+<tr>
+<td>MoE 版本</td>
+<td>4 experts / top-1，198M-A64M</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-环境使用"><span class="chapter">1</span><span class="h2-text">环境使用</span></h2>
+<pre><code class="language-bash">conda activate minimind
+cd /Users/dylan/code/minimind
+python -c &quot;import torch; print(torch.__version__)&quot;   # 2.5.1
+</code></pre>
+<p>关键版本（已与 <code>requirements.txt</code> 对齐）：</p>
+<table>
+<thead>
+<tr>
+<th>包</th>
+<th>版本</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>torch</td>
+<td>2.5.1</td>
+<td>conda 安装的 CPU 版；Intel macOS 上 pip 最高只有 2.2.2</td>
+</tr>
+<tr>
+<td>transformers</td>
+<td>4.57.6</td>
+<td>模型加载、chat template</td>
+</tr>
+<tr>
+<td>datasets</td>
+<td>3.6.0</td>
+<td>读 JSONL</td>
+</tr>
+<tr>
+<td>pyarrow</td>
+<td>19.0.0</td>
+<td><strong>手动固定</strong>：Intel macOS 上 <code>pyarrow&gt;=20</code> 没有 wheel，会触发 Rust 编译失败</td>
+</tr>
+<tr>
+<td>numpy</td>
+<td>1.26.4</td>
+<td>项目 pin</td>
+</tr>
+<tr>
+<td>trl</td>
+<td>0.13.0</td>
+<td>项目锁定但实际训练脚本并未使用（算法全部原生实现）</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>⚠️ <strong>必须从 <code>trainer/</code> 目录运行训练脚本</strong>。脚本内部大量使用 <code>../dataset/...</code>、<code>../out/...</code>、<code>../model</code> 这类相对路径。</p>
+</blockquote>
+<pre><code class="language-bash">cd trainer
+python train_pretrain.py --help
+</code></pre>
+<hr />
+<h2 id="2-第一站推理"><span class="chapter">2</span><span class="h2-text">第一站：推理</span></h2>
+<p>先建立直觉：模型能做什么、速度如何、两种权重格式有什么区别。</p>
+<h3 id="21-两种权重格式">2.1 两种权重格式</h3>
+<table>
+<thead>
+<tr>
+<th>格式</th>
+<th>路径</th>
+<th>加载方式</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原生 MiniMind</td>
+<td><code>out/*.pth</code></td>
+<td><code>--load_from model</code> + <code>--hidden_size/--num_hidden_layers</code></td>
+<td><strong>训练</strong>、LoRA、续训</td>
+</tr>
+<tr>
+<td>HuggingFace/Qwen3</td>
+<td><code>./minimind-3</code></td>
+<td><code>AutoModelForCausalLM.from_pretrained</code></td>
+<td><strong>推理</strong>、部署、生态兼容</td>
+</tr>
+</tbody>
+</table>
+<p><code>./minimind-3</code> 是 <code>scripts/convert_model.py</code> 转换出来的，<code>config.json</code> 里写的是 <code>Qwen3ForCausalLM</code>。它<strong>不能</strong>直接用于仓库内的训练脚本；训练要用原生 <code>.pth</code>。</p>
+<h3 id="22-跑一次推理">2.2 跑一次推理</h3>
+<pre><code class="language-bash">conda activate minimind
+cd /Users/dylan/code/minimind
+
+# 自动测试 8 个问题
+python eval_llm.py --load_from ./minimind-3
+
+# 手动对话
+python eval_llm.py --load_from ./minimind-3
+# 输入 1 进入手动模式
+</code></pre>
+<p>本机实测：约 <strong>5.5–6.4 tokens/s</strong>（CPU，fp16 推理）。
+短回答几秒，长回答要等几十秒，这是正常的。</p>
+<p>常用参数：</p>
+<pre><code class="language-bash">python eval_llm.py --load_from ./minimind-3 \
+  --max_new_tokens 256 \
+  --temperature 0.85 \
+  --top_p 0.95 \
+  --open_thinking 1        # 开启  thinking 输出
+</code></pre>
+<h3 id="23-web-ui-与-api">2.3 Web UI 与 API</h3>
+<pre><code class="language-bash"># Web UI：需要先把 HF 模型目录放进 scripts/
+cp -r minimind-3 scripts/
+cd scripts &amp;&amp; streamlit run web_demo.py
+
+# OpenAI 兼容 API（端口 8998）
+cd /Users/dylan/code/minimind
+python scripts/serve_openai_api.py --load_from ./minimind-3
+</code></pre>
+<h3 id="24-下载官方原生权重可选用于微调">2.4 下载官方原生权重（可选，用于微调）</h3>
+<pre><code class="language-bash">modelscope download --model gongjy/minimind-3-pytorch \
+  full_sft_768.pth --local_dir ./out
+
+# 用原生权重推理
+python eval_llm.py --load_from model --weight full_sft
+</code></pre>
+<p>首发权重文件对照：</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pretrain_768.pth</code></td>
+<td>预训练产物，SFT 的起点</td>
+</tr>
+<tr>
+<td><code>full_sft_768.pth</code></td>
+<td>对话 SFT 产物，最常用的基座</td>
+</tr>
+<tr>
+<td><code>dpo_768.pth</code> / <code>grpo_768.pth</code> / <code>ppo_actor_768.pth</code></td>
+<td>各对齐阶段产物</td>
+</tr>
+<tr>
+<td><code>lora_identity_768.pth</code> / <code>lora_medical_768.pth</code> / <code>lora_exam_768.pth</code></td>
+<td>LoRA 增量权重（约 0.8MB）</td>
+</tr>
+<tr>
+<td><code>*_768_moe.pth</code></td>
+<td>MoE 版本对应权重</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-代码地图与阅读顺序"><span class="chapter">3</span><span class="h2-text">代码地图与阅读顺序</span></h2>
+<p>按下面的顺序读，每一步都建立在前一步之上：</p>
+<table>
+<thead>
+<tr>
+<th>顺序</th>
+<th>文件</th>
+<th>行数</th>
+<th>读什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>model/model_minimind.py</code></td>
+<td>292</td>
+<td>模型结构、RoPE、GQA、MoE、loss、generate</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>dataset/lm_dataset.py</code></td>
+<td>260</td>
+<td>四种数据集、chat template、label mask</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>trainer/trainer_utils.py</code></td>
+<td>209</td>
+<td>学习率、checkpoint、初始化、参数统计</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>trainer/train_pretrain.py</code></td>
+<td>163</td>
+<td>最干净的训练循环，先看它</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>trainer/train_full_sft.py</code></td>
+<td>164</td>
+<td>和预训练几乎相同，差别在数据集</td>
+</tr>
+<tr>
+<td>6</td>
+<td><code>model/model_lora.py</code> + <code>trainer/train_lora.py</code></td>
+<td>65 + 176</td>
+<td>LoRA 实现与冻结策略</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>trainer/train_dpo.py</code></td>
+<td>218</td>
+<td>参考模型、DPO loss</td>
+</tr>
+<tr>
+<td>8</td>
+<td><code>trainer/train_distillation.py</code></td>
+<td>238</td>
+<td>CE + KL 混合损失</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>trainer/train_grpo.py</code> / <code>train_ppo.py</code> / <code>train_agent.py</code></td>
+<td>326 / 447 / 485</td>
+<td>rollout、奖励、策略更新</td>
+</tr>
+<tr>
+<td>10</td>
+<td><code>scripts/convert_model.py</code>、<code>serve_openai_api.py</code></td>
+<td>144 / 252</td>
+<td>格式转换与部署</td>
+</tr>
+</tbody>
+</table>
+<p>建议边读边回答：</p>
+<ul>
+<li><code>train_pretrain.py</code> 里哪一行真正更新了参数？</li>
+<li><code>loss = res.loss + res.aux_loss</code> 中的 <code>aux_loss</code> 什么时候不为 0？</li>
+<li>为什么 SFT 的 loss 只算 assistant 部分？代码在哪里实现？</li>
+<li><code>lm_checkpoint</code> 保存了什么？<code>--from_resume 1</code> 恢复的是什么？</li>
+<li><code>generate()</code> 里 KV cache 是怎样避免重复计算的？</li>
+</ul>
+<hr />
+<h2 id="4-模型结构逐块拆解"><span class="chapter">4</span><span class="h2-text">模型结构逐块拆解</span></h2>
+<p>文件：<code>model/model_minimind.py</code></p>
+<h3 id="41-rmsnorm">4.1 RMSNorm</h3>
+<pre><code class="language-python">x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + eps) * weight
+</code></pre>
+<p>比 LayerNorm 少去均值、少 bias，计算更省。注意 <code>forward</code> 里先转 <code>float()</code> 再转回原 dtype，是 fp16 数值稳定性的常见写法。</p>
+<h3 id="42-rope-与-yarn">4.2 RoPE 与 YaRN</h3>
+<p><code>precompute_freqs_cis()</code> 预计算每个位置的 cos/sin：</p>
+<ul>
+<li>普通 RoPE：<code>freqs = 1 / (theta ** (arange(0, dim, 2) / dim))</code></li>
+<li><code>inference_rope_scaling=True</code> 时启用 YaRN，把频率按 <code>beta_fast/beta_slow</code> 分段拉伸，用于超出训练长度外推（默认 4 倍）</li>
+</ul>
+<p><code>apply_rotary_pos_emb()</code> 对 q/k 做旋转，q 和 k 用同一个位置编码。</p>
+<h3 id="43-gqa-attention">4.3 GQA Attention</h3>
+<pre><code class="language-python">q_proj: 768 → 8 × 96
+k_proj: 768 → 4 × 96
+v_proj: 768 → 4 × 96
+repeat_kv(k, n_rep=2)
+</code></pre>
+<p>4 组 KV 被复制 2 份，和 8 个 Q head 对齐。好处：KV cache 显存减半，推理更快。</p>
+<p>细节：</p>
+<ul>
+<li><code>q_norm</code> / <code>k_norm</code>：对每个 head 做 RMSNorm（QK-Norm），提升训练稳定性。</li>
+<li>训练且无 cache 时走 <code>F.scaled_dot_product_attention</code>；否则手写 causal mask + softmax。</li>
+<li><code>past_key_value</code> 拼接实现 KV cache，<code>generate()</code> 每次只输入新 token。</li>
+</ul>
+<h3 id="44-swiglu-ffn">4.4 SwiGLU FFN</h3>
+<pre><code class="language-python">down_proj( silu(gate_proj(x)) * up_proj(x) )
+</code></pre>
+<p>三个线性层，中间维度 2432。<code>intermediate_size</code> 默认由 <code>ceil(hidden * π / 64) * 64</code> 推出。</p>
+<h3 id="45-moe可选">4.5 MoE（可选）</h3>
+<p><code>MOEFeedForward</code>：</p>
+<ol>
+<li>gate 输出每个 token 对 4 个专家的分数；</li>
+<li>取 top-1；</li>
+<li>只把 token 送给命中的专家；</li>
+<li>训练时计算负载均衡辅助损失 <code>aux_loss</code>；</li>
+<li><code>num_experts_per_tok=1</code> 时用 straight-through 让路由权重在前向为 1.0、梯度仍可回传。</li>
+</ol>
+<p>注意实现是 <code>for</code> 循环遍历专家，<strong>教学清晰但速度慢</strong>，这也是 README 说 MoE 实际训练反而更重的原因之一。</p>
+<h3 id="46-block-与残差">4.6 Block 与残差</h3>
+<p>Pre-Norm 结构：</p>
+<pre><code>x = x + Attention(RMSNorm(x))
+x = x + FFN(RMSNorm(x))
+</code></pre>
+<h3 id="47-输出层与-loss">4.7 输出层与 loss</h3>
+<pre><code class="language-python">logits = lm_head(hidden_states)
+loss = cross_entropy(logits[..., :-1, :], labels[..., 1:], ignore_index=-100)
+</code></pre>
+<ul>
+<li>输入第 <code>t</code> 个 token，预测第 <code>t+1</code> 个 token；</li>
+<li><code>tie_word_embeddings=True</code> 时 <code>lm_head.weight</code> 与 <code>embed_tokens.weight</code> 是同一块参数（省 4.9M 参数）；</li>
+<li><code>ignore_index=-100</code> 让 padding / prompt 部分不产生梯度。</li>
+</ul>
+<h3 id="48-手写-generate">4.8 手写 generate</h3>
+<p><code>MiniMindForCausalLM.generate()</code> 没调 <code>transformers</code> 的 generate，而是自己实现：</p>
+<ul>
+<li>temperature 缩放 logits；</li>
+<li>top-k 截断；</li>
+<li>top-p（nucleus）累积概率截断；</li>
+<li>repetition penalty；</li>
+<li>KV cache 增量解码；</li>
+<li><code>TextStreamer</code> 流式输出；</li>
+<li>遇到 eos 提前结束。</li>
+</ul>
+<p>读这个方法可以完整理解采样策略。</p>
+<h3 id="49-参数量怎么来的">4.9 参数量怎么来的</h3>
+<p>以 64M 为例（tied embedding 只算一次）：</p>
+<table>
+<thead>
+<tr>
+<th>部分</th>
+<th>计算</th>
+<th>参数量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>词嵌入</td>
+<td>6400 × 768</td>
+<td>4.92M</td>
+</tr>
+<tr>
+<td>每层 Attention</td>
+<td>q/o: 2×768×768；k/v: 2×768×384</td>
+<td>≈1.77M</td>
+</tr>
+<tr>
+<td>每层 FFN</td>
+<td>3 × 768 × 2432</td>
+<td>≈5.61M</td>
+</tr>
+<tr>
+<td>每层小计</td>
+<td>Attention + FFN</td>
+<td>≈7.38M</td>
+</tr>
+<tr>
+<td>8 层</td>
+<td>7.38M × 8</td>
+<td>≈59.0M</td>
+</tr>
+<tr>
+<td>合计</td>
+<td>59.0M + 4.9M</td>
+<td><strong>≈63.9M</strong></td>
+</tr>
+</tbody>
+</table>
+<p>可以用 <code>get_model_params()</code> 打印验证。MoE 版本把每层 FFN 换成 4 个专家，总参数 198M，但每 token 只激活 1 个专家，所以标成 <code>198M-A64M</code>。</p>
+<hr />
+<h2 id="5-数据与-loss-mask"><span class="chapter">5</span><span class="h2-text">数据与 loss mask</span></h2>
+<p>文件：<code>dataset/lm_dataset.py</code></p>
+<h3 id="51-预训练数据-pretraindataset">5.1 预训练数据 <code>PretrainDataset</code></h3>
+<p>JSONL 每行：<code>{"text": "..."}</code></p>
+<p>处理：</p>
+<ol>
+<li>tokenize，截断到 <code>max_length - 2</code>；</li>
+<li>首尾加 bos/eos；</li>
+<li>pad 到固定长度；</li>
+<li>labels 复制 input_ids，pad 位置设为 <code>-100</code>。</li>
+</ol>
+<p><strong>没有做样本拼接（packing）</strong>，每条样本独立 padding，所以短样本会浪费算力。</p>
+<h3 id="52-sft-数据-sftdataset">5.2 SFT 数据 <code>SFTDataset</code></h3>
+<p>JSONL 每行：<code>{"conversations": [{"role": ..., "content": ...}, ...]}</code></p>
+<p>关键点：<strong>只对 assistant 的回答算 loss</strong>。</p>
+<p>实现方式：</p>
+<ol>
+<li><code>apply_chat_template</code> 生成完整对话文本；</li>
+<li>找到 <code>&lt;|im_start|&gt;assistant\n</code> 的位置，之后的内容才标为有效 label；</li>
+<li>用户问题、system prompt 全部是 <code>-100</code>。</li>
+</ol>
+<p>为什么要 mask？</p>
+<ul>
+<li>模型需要学的是「给定上下文如何回答」，不是「如何提问」；</li>
+<li>不 mask 会让模型也学会复述用户输入，且 loss 被大量 prompt token 稀释。</li>
+</ul>
+<p>另外两个工程细节：</p>
+<ul>
+<li><code>pre_processing_chat</code>：以 20% 概率给没有 system 的样本加系统提示，增加鲁棒性；</li>
+<li><code>post_processing_chat</code>：以 80% 概率删除空的 <code>thinking\n\n&lt;/think&gt;</code>，避免模型学到无意义思考标签。</li>
+</ul>
+<h3 id="53-dpo-数据-dpodataset">5.3 DPO 数据 <code>DPODataset</code></h3>
+<p>每行包含 <code>chosen</code> 和 <code>rejected</code> 两段完整对话。</p>
+<ul>
+<li>两段都做 chat template；</li>
+<li>各自生成 loss mask（只算 assistant）；</li>
+<li>返回 <code>x_chosen/y_chosen/mask_chosen</code> 和 rejected 版本；</li>
+<li>训练时 batch 里前一半是 chosen、后一半是 rejected（<code>dpo_loss</code> 依赖这个顺序）。</li>
+</ul>
+<h3 id="54-rlaif-agent-数据">5.4 RLAIF / Agent 数据</h3>
+<ul>
+<li><code>RLAIFDataset</code>：只返回 prompt，答案由模型在线采样，再用奖励模型打分；</li>
+<li><code>AgentRLDataset</code>：返回 <code>messages</code>、<code>tools</code>、<code>gt</code>，用于多步工具调用任务。</li>
+</ul>
+<hr />
+<h2 id="6-训练主线每个阶段在做什么"><span class="chapter">6</span><span class="h2-text">训练主线：每个阶段在做什么</span></h2>
+<blockquote>
+<p>下表默认是 <strong>minimind-3 / 64M / 单卡 3090</strong> 的官方配置与耗时（README 数据），用于建立量级概念。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>阶段</th>
+<th>脚本</th>
+<th>数据</th>
+<th>关键默认参数</th>
+<th>产物</th>
+<th>3090 单 epoch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>预训练</td>
+<td><code>train_pretrain.py</code></td>
+<td><code>pretrain_t2t_mini.jsonl</code></td>
+<td>seq 340, bs 32, accum 8, lr 5e-4, ep 2</td>
+<td><code>out/pretrain_768.pth</code></td>
+<td>≈1.21h</td>
+</tr>
+<tr>
+<td>全参 SFT</td>
+<td><code>train_full_sft.py</code></td>
+<td><code>sft_t2t_mini.jsonl</code></td>
+<td>seq 768, bs 16, lr 1e-5, ep 2</td>
+<td><code>out/full_sft_768.pth</code></td>
+<td>≈1.10h</td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td><code>train_lora.py</code></td>
+<td><code>lora_medical.jsonl</code> 等</td>
+<td>seq 340, bs 32, lr 1e-4, ep 10</td>
+<td><code>out/lora_*_768.pth</code></td>
+<td>≈0.9h</td>
+</tr>
+<tr>
+<td>DPO</td>
+<td><code>train_dpo.py</code></td>
+<td><code>dpo.jsonl</code></td>
+<td>seq 1024, bs 4, lr 4e-8, β 0.15, ep 1</td>
+<td><code>out/dpo_768.pth</code></td>
+<td>≈1.1h</td>
+</tr>
+<tr>
+<td>蒸馏</td>
+<td><code>train_distillation.py</code></td>
+<td><code>sft_t2t_mini.jsonl</code></td>
+<td>α 0.5, T 1.5, ep 6</td>
+<td><code>out/full_dist_768.pth</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>PPO</td>
+<td><code>train_ppo.py</code></td>
+<td><code>rlaif.jsonl</code> + reward model</td>
+<td>lr 3e-7, clip 0.2, KL 0.02</td>
+<td><code>out/ppo_actor_768.pth</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>GRPO</td>
+<td><code>train_grpo.py</code></td>
+<td><code>rlaif.jsonl</code> + reward model</td>
+<td>每 prompt 采 6 条, β 0.1</td>
+<td><code>out/grpo_768.pth</code></td>
+<td>—</td>
+</tr>
+<tr>
+<td>Agent RL</td>
+<td><code>train_agent.py</code></td>
+<td><code>agent_rl.jsonl</code></td>
+<td>多步工具调用 + 规则奖励</td>
+<td><code>out/agent_768.pth</code></td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="61-预训练">6.1 预训练</h3>
+<pre><code class="language-bash">cd trainer
+python train_pretrain.py
+</code></pre>
+<p>它做的是最标准的语言建模：给一段文本，预测下一个 token。</p>
+<p>观察点：</p>
+<ul>
+<li><code>loss</code> 应从约 <code>ln(6400) ≈ 8.76</code> 开始下降；</li>
+<li><code>logits_loss</code> 是主损失，<code>aux_loss</code> 只有 MoE 才非 0；</li>
+<li>学习率用余弦衰减：<code>lr * (0.1 + 0.45 * (1 + cos(π * step / total)))</code>；</li>
+<li>每 <code>save_interval</code> 步保存 <code>out/pretrain_768.pth</code>（fp16）；</li>
+<li><code>checkpoints/pretrain_768_resume.pth</code> 保存模型 + 优化器 + scaler + step，用于断点续训。</li>
+</ul>
+<h3 id="62-全参-sft">6.2 全参 SFT</h3>
+<pre><code class="language-bash">python train_full_sft.py --from_weight pretrain
+</code></pre>
+<p>和预训练代码几乎一样，区别：</p>
+<ul>
+<li>数据集换成 <code>SFTDataset</code>；</li>
+<li>默认 lr 从 5e-4 降到 1e-5（避免破坏预训练知识）；</li>
+<li><code>from_weight=pretrain</code> 加载上一步权重。</li>
+</ul>
+<p>产出模型才能按对话格式回答。</p>
+<h3 id="63-lora">6.3 LoRA</h3>
+<pre><code class="language-bash">python train_lora.py --lora_name lora_medical --data_path ../dataset/lora_medical.jsonl
+</code></pre>
+<p>实现要点（<code>model/model_lora.py</code>）：</p>
+<ul>
+<li>只给 <strong>in_features == out_features 的 Linear</strong> 加 LoRA；</li>
+<li><code>B</code> 初始化为 0，保证训练开始时输出不变；</li>
+<li>rank 默认 16；</li>
+<li>只保存 LoRA 的 A/B 权重（约 0.8MB），基座不动；</li>
+<li>合并公式：<code>W' = W + B @ A</code>，<code>merge_lora()</code> 已实现。</li>
+</ul>
+<p>推理时加载：</p>
+<pre><code class="language-bash">python eval_llm.py --load_from model --weight full_sft --lora_weight lora_medical
+</code></pre>
+<p>适合：领域知识注入（医疗、考试、身份），不想全参微调时。</p>
+<h3 id="64-dpo">6.4 DPO</h3>
+<pre><code class="language-bash">python train_dpo.py --from_weight full_sft --beta 0.15
+</code></pre>
+<p>DPO 不需要单独训练奖励模型，直接用偏好对：</p>
+<pre><code>loss = -logsigmoid( β * [ (logπ(chosen) - logπ(rejected))
+                        - (logπ_ref(chosen) - logπ_ref(rejected)) ] )
+</code></pre>
+<p>代码里初始化了两个模型：</p>
+<ul>
+<li><code>model</code>：策略模型，参与训练；</li>
+<li><code>ref_model</code>：参考模型，冻结，只算 logprob。</li>
+</ul>
+<p><code>beta</code> 越大越保守（更贴近参考模型），越小越敢偏离。lr 默认只有 <code>4e-8</code>，因为 DPO 很容易训崩。</p>
+<h3 id="65-蒸馏">6.5 蒸馏</h3>
+<pre><code class="language-bash">python train_distillation.py
+</code></pre>
+<p>总损失：</p>
+<pre><code>loss = α * CE(student, labels) + (1 - α) * KL(student/T || teacher/T) * T²
+</code></pre>
+<ul>
+<li>教师默认是 MoE（<code>teacher_use_moe=1</code>），学生是 Dense；</li>
+<li><code>alpha=0.5</code> 表示一半学硬标签、一半学教师的软分布；</li>
+<li>温度 <code>T=1.5</code> 让软分布更平滑，携带更多“暗知识”。</li>
+</ul>
+<h3 id="66-rlppo-grpo-agent">6.6 RL：PPO / GRPO / Agent</h3>
+<p>这三个脚本都需要<strong>奖励模型</strong>：</p>
+<pre><code class="language-bash">--reward_model_path ../../internlm2-1_8b-reward
+</code></pre>
+<p>即 InternLM2-1.8B Reward，需要单独下载。流程：</p>
+<ol>
+<li>策略模型对 prompt 采样多条回答（rollout）；</li>
+<li>奖励模型 / 规则函数打分；</li>
+<li>PPO：用 critic 估计优势，做 clip 更新；</li>
+<li>GRPO：同一 prompt 的多条回答组内归一化得到优势，不需要 critic；</li>
+<li>Agent：多步工具调用，按最终结果和工具执行情况给奖励。</li>
+</ol>
+<p>GRPO 还包含一些工程奖励整形（长度约束、重复惩罚、<code>thinking</code> 格式），见 <code>calculate_rewards()</code>。</p>
+<blockquote>
+<p>本机 16GB CPU <strong>不建议实际跑 RL</strong>：仅奖励模型就 1.8B，且每条样本要多次生成。把这三份代码当阅读理解即可。</p>
+</blockquote>
+<h3 id="67-转-hf-格式与部署">6.7 转 HF 格式与部署</h3>
+<pre><code class="language-bash">cd scripts
+python convert_model.py
+</code></pre>
+<p>脚本默认读取 <code>../out/full_sft_768.pth</code>，输出 <code>../minimind-3</code>（Qwen3 结构）。转换后可以用 <code>transformers</code>、vLLM、ollama 等生态工具。</p>
+<hr />
+<h2 id="7-本机-cpu-的现实与玩具模型路线"><span class="chapter">7</span><span class="h2-text">本机 CPU 的现实与玩具模型路线</span></h2>
+<h3 id="71-实测速度本机torch-默认-2-线程">7.1 实测速度（本机，torch 默认 2 线程）</h3>
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th>每步耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>64M，batch 1，seq 128</td>
+<td><strong>1.79 s/step</strong></td>
+</tr>
+<tr>
+<td>64M，batch 1，seq 340</td>
+<td><strong>3.06 s/step</strong></td>
+</tr>
+<tr>
+<td>玩具 5M，batch 8，seq 128</td>
+<td><strong>1.02 s/step</strong></td>
+</tr>
+<tr>
+<td>64M 推理</td>
+<td><strong>≈6 tokens/s</strong></td>
+</tr>
+</tbody>
+</table>
+<p>补充：本机 <code>torch.get_num_threads()</code> 默认是 2（按物理核数），<strong>不要手动改成 4</strong>——我实测改成 4 线程反而从 3.06s 降到 3.93s/step（超线程争抢）。</p>
+<h3 id="72-为什么不能按默认配置跑完整训练">7.2 为什么不能按默认配置跑完整训练</h3>
+<p><code>pretrain_t2t_mini.jsonl</code> 有 1.18GB。以 batch 32 计算，一个 epoch 约几万步；即使按最乐观的 20–30 s/step 估计，也要<strong>数十天</strong>。SFT 数据 1.66GB，同理。</p>
+<p>所以本机的定位是：</p>
+<ul>
+<li>✅ 推理、读代码、跑通流程</li>
+<li>✅ 用<strong>子集 + 小模型</strong>做实验</li>
+<li>❌ 复现官方 64M 完整训练</li>
+</ul>
+<h3 id="73-玩具模型路线推荐">7.3 玩具模型路线（推荐）</h3>
+<p>思路：把模型缩到 5M、数据缩到几千条，让一次完整训练在 10–30 分钟内结束。</p>
+<p><strong>第一步：造子集</strong>（在项目根目录）</p>
+<pre><code class="language-bash">head -n 5000 dataset/pretrain_t2t_mini.jsonl &gt; dataset/pretrain_toy.jsonl
+head -n 3000 dataset/sft_t2t_mini.jsonl    &gt; dataset/sft_toy.jsonl
+wc -l dataset/pretrain_toy.jsonl dataset/sft_toy.jsonl
+</code></pre>
+<p><strong>第二步：训练玩具预训练模型</strong></p>
+<pre><code class="language-bash">cd trainer
+python train_pretrain.py \
+  --data_path ../dataset/pretrain_toy.jsonl \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 8 --max_seq_len 128 --epochs 1 \
+  --save_weight pretrain_toy \
+  --save_interval 200 --log_interval 20 \
+  --num_workers 2
+</code></pre>
+<p>预期：约 625 步，<strong>10–12 分钟</strong>跑完，产出 <code>../out/pretrain_toy_256.pth</code>。
+loss 会从 8.7 左右下降，但模型仍然不会说人话——它只学了 5000 条样本、1 个 epoch，这是正常的。</p>
+<p><strong>第三步：玩具 SFT</strong></p>
+<pre><code class="language-bash">python train_full_sft.py \
+  --data_path ../dataset/sft_toy.jsonl \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 4 --max_seq_len 256 --epochs 1 \
+  --from_weight pretrain_toy --save_weight full_sft_toy \
+  --save_interval 200 --log_interval 20 \
+  --num_workers 2
+</code></pre>
+<p>约 750 步，20–30 分钟，产出 <code>../out/full_sft_toy_256.pth</code>。</p>
+<p><strong>第四步：验证</strong></p>
+<pre><code class="language-bash">cd /Users/dylan/code/minimind
+python eval_llm.py --load_from model \
+  --weight full_sft_toy \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --max_new_tokens 64
+</code></pre>
+<p>你会看到一个“会套对话格式、但内容很弱”的模型。<strong>重点不是效果，而是整条链路（数据 → tokenizer → 训练 → 保存 → 加载 → 推理）全部跑通。</strong></p>
+<p><strong>第五步（可选）：玩具 LoRA / DPO</strong></p>
+<pre><code class="language-bash">cd trainer
+
+# LoRA：先造 1000 条医疗子集
+head -n 1000 ../dataset/lora_medical.jsonl &gt; ../dataset/lora_toy.jsonl
+python train_lora.py \
+  --data_path ../dataset/lora_toy.jsonl \
+  --lora_name lora_toy \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 4 --max_seq_len 192 --epochs 3 \
+  --from_weight full_sft_toy --save_interval 100 --log_interval 10
+
+# DPO：先造 500 条偏好对
+head -n 500 ../dataset/dpo.jsonl &gt; ../dataset/dpo_toy.jsonl
+python train_dpo.py \
+  --data_path ../dataset/dpo_toy.jsonl \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 1 --max_seq_len 512 --epochs 1 \
+  --from_weight full_sft_toy --save_weight dpo_toy \
+  --save_interval 100 --log_interval 10
+</code></pre>
+<h3 id="74-玩具路线的三个注意点">7.4 玩具路线的三个注意点</h3>
+<ol>
+<li><strong>文件名编码了 hidden_size</strong>：<code>pretrain_toy_256.pth</code>。换模型宽度时记得同步改 <code>--hidden_size</code>，否则加载会 size mismatch。</li>
+<li><strong><code>--save_weight</code> 是输出名，<code>--from_weight</code> 是输入名</strong>。两者不要混。</li>
+<li><strong>Mac 上 <code>--num_workers</code> 不要开太大</strong>：2 就够了，设 8 会因进程启动开销变慢。</li>
+</ol>
+<hr />
+<h2 id="8-四周学习计划"><span class="chapter">8</span><span class="h2-text">四周学习计划</span></h2>
+<h3 id="第-1-周推理-模型结构">第 1 周：推理 + 模型结构</h3>
+<p>目标：能不看代码画出 MiniMind 的结构图，并解释每个模块。</p>
+<ul>
+<li><span class="task-box" aria-hidden="true"></span> 跑通 <code>eval_llm.py</code> 自动测试与手动对话</li>
+<li><span class="task-box" aria-hidden="true"></span> 启动一次 Web UI 或 OpenAI API</li>
+<li><span class="task-box" aria-hidden="true"></span> 精读 <code>model/model_minimind.py</code>，手画 Block 图</li>
+<li><span class="task-box" aria-hidden="true"></span> 手算 64M 参数量，与 <code>get_model_params()</code> 输出对照</li>
+<li><span class="task-box" aria-hidden="true"></span> 改 <code>temperature</code> / <code>top_p</code> / <code>repetition_penalty</code>，观察输出差异</li>
+<li><span class="task-box" aria-hidden="true"></span> 用 <code>tokenizer.apply_chat_template()</code> 打印一条完整对话文本，找到 assistant 边界</li>
+</ul>
+<p>自检问题：</p>
+<ul>
+<li>为什么 KV heads 比 Q heads 少？省了什么？</li>
+<li>RoPE 为什么不用可学习位置编码？</li>
+<li><code>tie_word_embeddings</code> 省了多少参数？</li>
+</ul>
+<h3 id="第-2-周数据与预训练">第 2 周：数据与预训练</h3>
+<p>目标：理解数据格式、loss mask，跑通玩具预训练。</p>
+<ul>
+<li><span class="task-box" aria-hidden="true"></span> 各取 3 行 <code>pretrain_t2t_mini.jsonl</code> / <code>sft_t2t_mini.jsonl</code> 对照格式</li>
+<li><span class="task-box" aria-hidden="true"></span> 跑 <code>train_tokenizer.py</code> 的 <code>get_texts()</code>，理解 BPE 语料来源（不要覆盖 <code>model/</code>）</li>
+<li><span class="task-box" aria-hidden="true"></span> 造子集，跑玩具预训练（第 7.3 节）</li>
+<li><span class="task-box" aria-hidden="true"></span> 观察 loss 曲线，解释为什么起点约为 <code>ln(6400)</code></li>
+<li><span class="task-box" aria-hidden="true"></span> 手动中断训练，用 <code>--from_resume 1</code> 续训，确认 step 恢复</li>
+<li><span class="task-box" aria-hidden="true"></span> 读 <code>lm_checkpoint()</code>，说清 <code>*_resume.pth</code> 里有什么</li>
+</ul>
+<h3 id="第-3-周sftloradpo">第 3 周：SFT、LoRA、DPO</h3>
+<p>目标：理解三种对齐/微调方式的区别。</p>
+<ul>
+<li><span class="task-box" aria-hidden="true"></span> 跑玩具 SFT，用 <code>eval_llm.py</code> 对话</li>
+<li><span class="task-box" aria-hidden="true"></span> 打印 <code>SFTDataset.generate_labels()</code> 的结果，标出哪些 token 是 <code>-100</code></li>
+<li><span class="task-box" aria-hidden="true"></span> 跑玩具 LoRA，对比加载前后输出</li>
+<li><span class="task-box" aria-hidden="true"></span> 用 <code>merge_lora()</code> 合并权重，验证合并后不加载 LoRA 也能复现效果</li>
+<li><span class="task-box" aria-hidden="true"></span> 跑玩具 DPO，观察 <code>dpo_loss</code> 是否下降</li>
+<li><span class="task-box" aria-hidden="true"></span> 对比全参 SFT / LoRA / DPO 的显存、参数量、数据需求</li>
+</ul>
+<h3 id="第-4-周蒸馏rl部署与实验">第 4 周：蒸馏、RL、部署与实验</h3>
+<p>目标：读懂高级算法，完成一次格式转换和部署。</p>
+<ul>
+<li><span class="task-box" aria-hidden="true"></span> 读 <code>train_distillation.py</code>，手推 <code>α*CE + (1-α)*KL*T²</code></li>
+<li><span class="task-box" aria-hidden="true"></span> 读 <code>train_grpo.py</code> 的 <code>calculate_rewards()</code>，列出所有奖励项</li>
+<li><span class="task-box" aria-hidden="true"></span> 读 <code>train_agent.py</code>，理解多步工具调用如何进入训练</li>
+<li><span class="task-box" aria-hidden="true"></span> 把玩具模型转成 HF 格式（修改 <code>convert_model.py</code> 的路径与 hidden_size）</li>
+<li><span class="task-box" aria-hidden="true"></span> 用 <code>serve_openai_api.py</code> 起服务，用 curl 调一次</li>
+<li><span class="task-box" aria-hidden="true"></span> 从第 9 节挑 2 个实验，写一页结论</li>
+</ul>
+<hr />
+<h2 id="9-十个可以动手的实验"><span class="chapter">9</span><span class="h2-text">十个可以动手的实验</span></h2>
+<p>每个实验都建议：<strong>只改一个变量 → 固定种子 → 跑玩具规模 → 记录 loss/速度/输出</strong>。</p>
+<h3 id="实验-1gqa-到底省了什么">实验 1：GQA 到底省了什么</h3>
+<p>把 <code>num_key_value_heads</code> 改成 8（等价 MHA）、4（默认）、2、1，比较参数量与推理速度。</p>
+<ul>
+<li>预期：KV cache 随 KV heads 线性减小；参数量减少主要来自 k/v 投影。</li>
+<li>观察点：<code>k_proj/v_proj</code> 的输出维度。</li>
+</ul>
+<h3 id="实验-2rope-theta">实验 2：RoPE theta</h3>
+<p>把 <code>rope_theta</code> 从 <code>1e6</code> 改成 <code>1e4</code>，重新训练玩具模型。</p>
+<ul>
+<li>预期：小模型 + 短序列差异不明显；长序列外推时 1e6 更好。</li>
+<li>进阶：打开 <code>inference_rope_scaling</code>，比较 2048 长度下的困惑度。</li>
+</ul>
+<h3 id="实验-3tied-embedding">实验 3：tied embedding</h3>
+<p>把 <code>tie_word_embeddings</code> 设为 <code>False</code>，打印参数量。</p>
+<ul>
+<li>预期：多出 <code>6400 × 768 ≈ 4.9M</code>。</li>
+<li>思考：小模型共享嵌入的利弊。</li>
+</ul>
+<h3 id="实验-4sft-的-label-mask">实验 4：SFT 的 label mask</h3>
+<p>临时把 <code>generate_labels()</code> 改成“全部 token 都算 loss”，训练 1 个 epoch。</p>
+<ul>
+<li>预期：loss 更低，但模型更容易复述问题，回答质量下降。</li>
+<li>这是理解“loss 低 ≠ 效果好”的最好例子。</li>
+</ul>
+<h3 id="实验-5lora-rank">实验 5：LoRA rank</h3>
+<p>把 <code>apply_lora(rank=16)</code> 改成 4 / 16 / 64。</p>
+<ul>
+<li>观察 LoRA 参数量占比（训练脚本会打印）。</li>
+<li>预期：rank 越大拟合能力越强，但更容易过拟合小数据集。</li>
+</ul>
+<h3 id="实验-6dpo-beta">实验 6：DPO beta</h3>
+<p>在玩具 DPO 上试 <code>beta=0.05 / 0.15 / 0.5</code>。</p>
+<ul>
+<li>预期：beta 小 → 偏离参考模型多，风险高；beta 大 → 更新保守。</li>
+<li>观察 <code>dpo_loss</code> 与生成风格。</li>
+</ul>
+<h3 id="实验-7采样策略">实验 7：采样策略</h3>
+<p>固定 prompt，比较：</p>
+<ul>
+<li><code>temperature=0.3</code> vs <code>0.85</code> vs <code>1.2</code></li>
+<li><code>top_p=0.5</code> vs <code>0.95</code></li>
+<li><code>top_k=1</code>（贪心）vs <code>50</code></li>
+</ul>
+<p>记录多样性、重复率、事实性。</p>
+<h3 id="实验-8moe-vs-dense玩具规模">实验 8：MoE vs Dense（玩具规模）</h3>
+<p>用 <code>--use_moe 1</code> 训练玩具 MoE（4 experts），对比：</p>
+<ul>
+<li>总参数量 / 激活参数量；</li>
+<li>每步耗时（预计明显变慢）；</li>
+<li><code>aux_loss</code> 是否收敛。</li>
+</ul>
+<h3 id="实验-9序列长度与吞吐">实验 9：序列长度与吞吐</h3>
+<p>玩具模型下比较 <code>max_seq_len=128 / 256 / 340</code> 的 s/step 与最终 loss。</p>
+<ul>
+<li>预期：耗时近似线性增长；短序列更快但长依赖学不到。</li>
+</ul>
+<h3 id="实验-10蒸馏温度">实验 10：蒸馏温度</h3>
+<p><code>temperature=1.0 / 1.5 / 2.0</code>，<code>alpha=0.2 / 0.5 / 0.8</code>。</p>
+<ul>
+<li>预期：温度越高软标签越平滑；alpha 越高越依赖真实标签。</li>
+<li>观察：学生模型在验证集上的表现与输出多样性。</li>
+</ul>
+<hr />
+<h2 id="10-排错手册"><span class="chapter">10</span><span class="h2-text">排错手册</span></h2>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>原因</th>
+<th>解决</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ModuleNotFoundError: datasets</code></td>
+<td>没激活环境</td>
+<td><code>conda activate minimind</code></td>
+</tr>
+<tr>
+<td><code>FileNotFoundError: ../out/pretrain_768.pth</code></td>
+<td>从错误目录运行 / 权重名不对</td>
+<td><code>cd trainer</code>；检查 <code>--from_weight</code></td>
+</tr>
+<tr>
+<td><code>size mismatch for ...</code></td>
+<td><code>--hidden_size</code> 与权重文件不匹配</td>
+<td>文件名里的数字就是 hidden_size</td>
+</tr>
+<tr>
+<td><code>RuntimeError: MPS backend</code> / CUDA 报错</td>
+<td>本机无 GPU</td>
+<td>显式 <code>--device cpu</code></td>
+</tr>
+<tr>
+<td><code>MemoryError</code> / 系统卡死</td>
+<td>batch/seq 太大</td>
+<td>bs 降到 1，seq 降到 128，用梯度累积</td>
+</tr>
+<tr>
+<td>loss 变 NaN</td>
+<td>lr 太大 / fp16 溢出</td>
+<td>降 lr；CPU 上默认 fp32，不要设 <code>--dtype float16</code></td>
+</tr>
+<tr>
+<td>训练极慢</td>
+<td>CPU 2 核，正常</td>
+<td>用子集 + 小模型；不要开 <code>--use_compile</code></td>
+</tr>
+<tr>
+<td><code>use_wandb</code> 报登录错误</td>
+<td>swanlab 未登录</td>
+<td>去掉 <code>--use_wandb</code></td>
+</tr>
+<tr>
+<td><code>pyarrow</code> 编译报 Rust 错误</td>
+<td>Intel macOS 无新版 wheel</td>
+<td>已固定 <code>pyarrow==19.0.0</code></td>
+</tr>
+<tr>
+<td>tokenizer 加载失败</td>
+<td><code>./model/tokenizer.json</code> 缺失</td>
+<td>确认在项目根目录运行推理</td>
+</tr>
+<tr>
+<td><code>--from_resume 1</code> 没恢复</td>
+<td><code>checkpoints/*_resume.pth</code> 不存在</td>
+<td>先正常训练并触发一次 save</td>
+</tr>
+<tr>
+<td>HF 模型下载慢/失败</td>
+<td>网络</td>
+<td>用 <code>modelscope download</code></td>
+</tr>
+</tbody>
+</table>
+<p>补充：</p>
+<ul>
+<li>训练脚本的 <code>--save_interval</code> 同时也是 resume checkpoint 的保存间隔；</li>
+<li><code>--use_compile 1</code> 在 CPU 上收益有限，LoRA 还会自动关闭；</li>
+<li><code>train_lora.py</code> 的 <code>--epochs</code> 默认 10，小数据集很容易过拟合，建议 1–3。</li>
+</ul>
+<hr />
+<h2 id="11-命令速查表"><span class="chapter">11</span><span class="h2-text">命令速查表</span></h2>
+<pre><code class="language-bash"># ===== 环境 =====
+conda activate minimind
+cd /Users/dylan/code/minimind
+
+# ===== 推理 =====
+python eval_llm.py --load_from ./minimind-3
+python eval_llm.py --load_from model --weight full_sft
+python eval_llm.py --load_from model --weight full_sft --lora_weight lora_medical
+python scripts/serve_openai_api.py --load_from ./minimind-3
+
+# ===== 下载 =====
+modelscope download --model gongjy/minimind-3 --local_dir ./minimind-3
+modelscope download --model gongjy/minimind-3-pytorch full_sft_768.pth --local_dir ./out
+modelscope download --dataset gongjy/minimind_dataset pretrain_t2t_mini.jsonl sft_t2t_mini.jsonl --local_dir ./dataset
+
+# ===== 正式训练（需 GPU，从 trainer/ 运行）=====
+cd trainer
+python train_pretrain.py
+python train_full_sft.py --from_weight pretrain
+python train_lora.py --lora_name lora_medical
+python train_dpo.py --from_weight full_sft
+python train_distillation.py
+python train_ppo.py    # 需 reward model
+python train_grpo.py   # 需 reward model
+python train_agent.py  # 需 reward model + 工具环境
+
+# ===== 玩具训练（本机 CPU）=====
+python scripts/train_ui.py   # 训练控制台 WebUI: http://localhost:8502
+
+python train_pretrain.py --data_path ../dataset/pretrain_toy.jsonl \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 8 --max_seq_len 128 --epochs 1 \
+  --save_weight pretrain_toy --save_interval 200 --log_interval 20 --num_workers 2
+
+python train_full_sft.py --data_path ../dataset/sft_toy.jsonl \
+  --hidden_size 256 --num_hidden_layers 4 \
+  --batch_size 4 --max_seq_len 256 --epochs 1 \
+  --from_weight pretrain_toy --save_weight full_sft_toy \
+  --save_interval 200 --log_interval 20 --num_workers 2
+
+# ===== 转换 =====
+cd ../scripts &amp;&amp; python convert_model.py
+</code></pre>
+<hr />
+<h2 id="12-术语表"><span class="chapter">12</span><span class="h2-text">术语表</span></h2>
+<table>
+<thead>
+<tr>
+<th>术语</th>
+<th>含义</th>
+<th>最直白的一句话</th>
+<th>在本项目中的位置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Pretrain</td>
+<td>下一 token 预测，学通用语言能力</td>
+<td>让模型疯狂做"接下半句"填空题，先把语言本身学会</td>
+<td><code>train_pretrain.py</code></td>
+</tr>
+<tr>
+<td>SFT</td>
+<td>Supervised Fine-Tuning，学对话格式</td>
+<td>拿标准问答示范教模型"别人问你我该怎么答"</td>
+<td><code>train_full_sft.py</code></td>
+</tr>
+<tr>
+<td>Loss mask</td>
+<td>只对部分 token 计算损失</td>
+<td>题目不计分、答案才计分——只惩罚模型该说却说错的部分</td>
+<td><code>SFTDataset.generate_labels()</code></td>
+</tr>
+<tr>
+<td>LoRA</td>
+<td>低秩增量微调，只训练 A/B 矩阵</td>
+<td>不改原书内容，只在页边贴小抄条，训练完贴上去就是新书</td>
+<td><code>model/model_lora.py</code></td>
+</tr>
+<tr>
+<td>DPO</td>
+<td>直接用偏好对优化策略，无需奖励模型</td>
+<td>摆出好答案和坏答案，让模型学会"更偏爱好的那个"</td>
+<td><code>train_dpo.py</code></td>
+</tr>
+<tr>
+<td>PPO</td>
+<td>带 critic 的策略梯度</td>
+<td>边写边打分：写得好就加强这种写法，写得差就抑制</td>
+<td><code>train_ppo.py</code></td>
+</tr>
+<tr>
+<td>GRPO</td>
+<td>组内相对优势，无需 critic</td>
+<td>同一道题让模型答 6 遍，组内比一比，答得最好的加强</td>
+<td><code>train_grpo.py</code></td>
+</tr>
+<tr>
+<td>CISPO</td>
+<td>一种更稳定的策略优化变体，本项目可选</td>
+<td>GRPO 的改良 loss，让更新步子更稳、不容易训崩</td>
+<td><code>--loss_type cispo</code></td>
+</tr>
+<tr>
+<td>Distillation</td>
+<td>用教师模型的软分布教学生</td>
+<td>大老师把"每个词的可能性打分表"抄给小学生，而不只抄答案</td>
+<td><code>train_distillation.py</code></td>
+</tr>
+<tr>
+<td>RoPE</td>
+<td>旋转位置编码</td>
+<td>给每个词盖一个"位置邮戳"，模型靠角度差知道谁在前谁在后</td>
+<td><code>precompute_freqs_cis()</code></td>
+</tr>
+<tr>
+<td>YaRN</td>
+<td>RoPE 的长度外推方案</td>
+<td>只读过短文的模型也能读长文的"望远镜"技巧</td>
+<td><code>inference_rope_scaling</code></td>
+</tr>
+<tr>
+<td>GQA</td>
+<td>Grouped Query Attention，多个 Q 共享 KV</td>
+<td>好几个提问头共用一本笔记，省显存又不怎么掉效果</td>
+<td><code>repeat_kv()</code></td>
+</tr>
+<tr>
+<td>KV cache</td>
+<td>缓存历史 K/V，避免重复计算</td>
+<td>把已经想过的内容记在小本上，别每蹦一个字都从头背一遍</td>
+<td><code>generate()</code></td>
+</tr>
+<tr>
+<td>MoE</td>
+<td>混合专家，每 token 只激活部分专家</td>
+<td>公司里有很多专家，每个问题只请一位专家上手干活</td>
+<td><code>MOEFeedForward</code></td>
+</tr>
+<tr>
+<td>SwiGLU</td>
+<td><code>silu(gate(x)) * up(x)</code> 的 FFN</td>
+<td>一种"先开闸再放水"的全连接层写法，效果更好还省算力</td>
+<td><code>FeedForward</code></td>
+</tr>
+<tr>
+<td>aux loss</td>
+<td>MoE 负载均衡辅助损失</td>
+<td>防止所有问题都挤去找同一位专家的"分流罚款"</td>
+<td><code>MOEFeedForward.forward()</code></td>
+</tr>
+<tr>
+<td>rollout</td>
+<td>RL 中让模型现场生成样本</td>
+<td>先让模型真刀真枪写一遍答案，再看写得怎么样来打分</td>
+<td><code>train_grpo.py</code></td>
+</tr>
+<tr>
+<td>temperature</td>
+<td>采样温度，越大越随机</td>
+<td>掷骰子的"疯狂程度"：0 就是死板背答案，1 以上开始放飞</td>
+<td><code>generate()</code></td>
+</tr>
+<tr>
+<td>top-p</td>
+<td>核采样，保留累积概率前 p 的 token</td>
+<td>只从"最有戏的候选词"里抽签，防止蹦出离谱的词</td>
+<td><code>generate()</code></td>
+</tr>
+<tr>
+<td>packing</td>
+<td>把多条短样本拼进一个序列</td>
+<td>短样本拼车出行，一车装满不浪费座位（本项目没用）</td>
+<td>本项目未使用</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="附录产物与文件对照">附录：产物与文件对照</h2>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model/tokenizer.json</code></td>
+<td>6400 词表 BPE tokenizer（不要覆盖）</td>
+</tr>
+<tr>
+<td><code>model/tokenizer_config.json</code></td>
+<td>chat template 与特殊 token 配置</td>
+</tr>
+<tr>
+<td><code>dataset/*.jsonl</code></td>
+<td>训练数据（已加入 <code>.gitignore</code>）</td>
+</tr>
+<tr>
+<td><code>out/pretrain_768.pth</code></td>
+<td>预训练权重</td>
+</tr>
+<tr>
+<td><code>out/full_sft_768.pth</code></td>
+<td>SFT 权重</td>
+</tr>
+<tr>
+<td><code>out/lora_*_768.pth</code></td>
+<td>LoRA 增量权重（约 0.8MB）</td>
+</tr>
+<tr>
+<td><code>out/dpo_768.pth</code> / <code>grpo_768.pth</code> / <code>ppo_actor_768.pth</code></td>
+<td>对齐阶段权重</td>
+</tr>
+<tr>
+<td><code>checkpoints/*_resume.pth</code></td>
+<td>断点续训状态（模型 + 优化器 + step）</td>
+</tr>
+<tr>
+<td><code>minimind-3/</code></td>
+<td>HF/Qwen3 格式权重（已加入 <code>.gitignore</code>）</td>
+</tr>
+<tr>
+<td><code>scripts/minimind-3/</code></td>
+<td>Web UI 扫描的模型目录（需要时手动复制）</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<blockquote>
+<p>学习建议：<strong>每读一个模块，就改一个参数、跑一次最小实验、记录一个结论。</strong>
+在这个项目里，跑通 5M 玩具模型的完整链路，比在纸上读完 64M 的全部代码更有价值。</p>
+</blockquote>
+    </article>
+
+    <footer class="footer">
+      <div class="foot-mark">MM</div>
+      <div>
+        <p>MiniMind 学习指导 · 本机实操版</p>
+        <p class="small">GENERATED FROM LEARNING_GUIDE.MD · 2026-10-25</p>
+      </div>
+    </footer>
+  </main>
+</div>
+
+<div class="controls">
+  <button class="round" id="backtop" type="button" aria-label="回到顶部" title="回到顶部">
+    <svg viewBox="0 0 24 24"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  </button>
+  <button class="round" id="theme" type="button" aria-label="切换主题" title="切换主题">
+    <svg class="icon-moon" viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+  </button>
+</div>
+
+<script>
+(function(){
+  var root=document.documentElement;
+  var saved=null;
+  try{saved=localStorage.getItem('mm-theme')}catch(e){}
+  var prefersDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  root.setAttribute('data-theme',saved||(prefersDark?'dark':'light'));
+
+  var themeBtn=document.getElementById('theme');
+  themeBtn&&themeBtn.addEventListener('click',function(){
+    var next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem('mm-theme',next)}catch(e){}
+  });
+
+  var printBtn=document.getElementById('print-btn');
+  printBtn&&printBtn.addEventListener('click',function(){window.print()});
+
+  var bar=document.querySelector('.progress span');
+  var backtop=document.getElementById('backtop');
+  function onScroll(){
+    var h=document.documentElement;
+    var max=h.scrollHeight-h.clientHeight;
+    var p=max>0?h.scrollTop/max:0;
+    if(bar)bar.style.transform='scaleX('+Math.min(1,Math.max(0,p))+')';
+    if(backtop)backtop.classList.toggle('show',h.scrollTop>900);
+  }
+  document.addEventListener('scroll',onScroll,{passive:true});
+  onScroll();
+  backtop&&backtop.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'})});
+
+  // 移动端目录
+  var sidebar=document.getElementById('sidebar');
+  var overlay=document.querySelector('.overlay');
+  var menuBtn=document.getElementById('menu-btn');
+  function closeMenu(){sidebar.classList.remove('open');overlay.classList.remove('show')}
+  menuBtn&&menuBtn.addEventListener('click',function(){
+    sidebar.classList.toggle('open');
+    overlay.classList.toggle('show');
+  });
+  overlay&&overlay.addEventListener('click',closeMenu);
+
+  // 代码块：语言标签 + 复制
+  document.querySelectorAll('.content pre').forEach(function(pre){
+    var code=pre.querySelector('code');
+    var lang='shell';
+    if(code&&code.className){
+      var m=code.className.match(/language-([\w+-]+)/);
+      if(m)lang=m[1];
+    }
+    var wrap=document.createElement('div');wrap.className='code-block';
+    pre.parentNode.insertBefore(wrap,pre);
+    var head=document.createElement('div');head.className='code-head';
+    var label=document.createElement('span');label.textContent=lang;
+    var btn=document.createElement('button');btn.className='copy';btn.type='button';btn.textContent='复制';
+    btn.addEventListener('click',function(){
+      var txt=code?code.innerText:'';
+      var done=function(){btn.textContent='已复制';btn.classList.add('done');
+        setTimeout(function(){btn.textContent='复制';btn.classList.remove('done')},1600)};
+      if(navigator.clipboard&&navigator.clipboard.writeText){
+        navigator.clipboard.writeText(txt).then(done,done);
+      }else{
+        var ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);
+        ta.select();try{document.execCommand('copy')}catch(e){}document.body.removeChild(ta);done();
+      }
+    });
+    head.appendChild(label);head.appendChild(btn);
+    wrap.appendChild(head);wrap.appendChild(pre);
+  });
+
+  // 表格横向滚动容器
+  document.querySelectorAll('.content table').forEach(function(t){
+    var w=document.createElement('div');w.className='table-scroll';
+    t.parentNode.insertBefore(w,t);w.appendChild(t);
+  });
+
+  // 警示 blockquote
+  document.querySelectorAll('.content blockquote').forEach(function(q){
+    if(q.textContent.indexOf('⚠️')!==-1)q.classList.add('warn');
+  });
+
+  // 标题锚点
+  document.querySelectorAll('.content h2[id],.content h3[id]').forEach(function(h){
+    var a=document.createElement('a');a.className='anchor';a.href='#'+h.id;a.textContent='#';a.setAttribute('aria-label','链接到本节');
+    h.appendChild(a);
+  });
+
+  // 目录高亮
+  var links=Array.prototype.slice.call(document.querySelectorAll('.toc a'));
+  var map={};
+  links.forEach(function(a){
+    var id=a.getAttribute('href').slice(1);
+    var el=document.getElementById(id);
+    if(el)map[id]=a;
+  });
+  var current=null;
+  var obs=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        var a=map[en.target.id];
+        if(a&&a!==current){
+          if(current)current.classList.remove('active');
+          a.classList.add('active');current=a;
+        }
+      }
+    });
+  },{rootMargin:'-12% 0px -76% 0px',threshold:0});
+  document.querySelectorAll('.content h2[id],.content h3[id]').forEach(function(h){obs.observe(h)});
+
+  // 点击目录后关闭移动端抽屉
+  links.forEach(function(a){a.addEventListener('click',closeMenu)});
+})();
+</script>
+</body>
+</html>
